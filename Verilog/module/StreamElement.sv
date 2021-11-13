@@ -63,22 +63,23 @@ module StreamElement
     parameter DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY = MAX_USE_BYTES+DATA_BUS_WIDTH_BYTES; 
    
 
-   reg  [$clog2(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY)-1:0]   USEStreamByteLength;
+    reg  [$clog2(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY)-1:0]   USEStreamByteLength;
+    reg  [$clog2(DATA_BUS_WIDTH_BYTES)-1:0]                     USEStartByte;  
 
-    reg [$clog2(DATA_BUS_WIDTH_BYTES)-1:0]           USEStartByte;  
     parameter USEBANKSELECTWIDTH = $clog2(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY);  
-    reg [USEBANKSELECTWIDTH-1:0]      USECurrentBank;  
+    reg [USEBANKSELECTWIDTH-1:0]   USECurrentBank;  
 
     typedef reg[7:0] byteReg;
     byteReg [(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY-1):0]   USEStreamByteFifo;
-    reg                              [1:0]      USEStreamState;  
+    reg     [1:0]                                            USEStreamState;  
 
     //
     //
     // LOOK AT:
     //   delimiterByteNum to figure out where it thinks the delimiter is. 
     //   streamElementLength to figure out where it thinks the last Byte is. 
-    
+    //    
+ 
 
     reg token;
     reg passToken; 
@@ -88,7 +89,7 @@ module StreamElement
     begin 
       if (reset) 
         begin 
-         $display("RESET TOKEN HOLDER ID ",RESET_TOKEN_HOLDER_ID, " MY_ID ", MY_ID); 
+          $display("RESET TOKEN HOLDER ID ",RESET_TOKEN_HOLDER_ID, " MY_ID ", MY_ID); 
           if (RESET_TOKEN_HOLDER_ID == MY_ID) 
           begin
             $display("Stream Element ",MY_ID," I hold the token at reset"); 
@@ -121,22 +122,29 @@ module StreamElement
     //////////////////////////////////////////////////////////////////
     // 
     // Each byte in our chain of bytes gets data from two places: 
+    //  Input     
+    //  A prior element in a chain (for a shift). 
     //    
-    //   *  
     //    
 
     /* verilator lint_off UNDRIVEN */ 
     logic [DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY-1:0]         delimiterByteArray;
-    logic [$clog2(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY)-1:0] delimiterByteNum; // Defined as the absolute byte position of the delimiter Byte (not the offset from the start).
+    logic [$clog2(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY)-1:0] delimiterByteNum;   // Defined as the absolute byte position of the delimiter Byte (not the offset from the start).
     /* verilator lint_on UNDRIVEN */ 
 
-    // Build an array of delimiter detectors. 
-    // then pick the smallest. 
+
+    // Build an array of delimiter detectors.  Then pick the smallest. 
+    genvar BI; 
+     for (BI = 0; BI <= MAX_VARIABLEFIELD_LENGTH+ DATA_BUS_WIDTH_BYTES; BI = BI + 1) begin : delimiterByteArrayBuilder 
+       assign delimiterByteArray[BI] = (USEStreamByteFifo[BI][7:0] == 'h2c) ? 1 : 0;
+     end
+
     integer i;  
     always_comb 
     begin 
-      delimiterByteNum = DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY-1; 
-      for (i = DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY-1; i>=0; i--) 
+      // Keep this high. Otherwise the message might think it is done before the delimiter is found. 
+      delimiterByteNum = DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY; 
+      for (i = MAX_VARIABLEFIELD_LENGTH + DATA_BUS_WIDTH_BYTES ; i>=1; i--) 
         if (delimiterByteArray[i] && (i > USEStartByte)) 
           delimiterByteNum = i[$clog2(DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY)-1:0]; 
     end 
@@ -147,15 +155,13 @@ module StreamElement
     // whch means chain will end at byte 27
     
     
-    reg  [$clog2(MAX_USE_BYTES)-1:0] USEStreamComputedByteLength;  
+    wire [$clog2(MAX_USE_BYTES)-1:0] USEStreamComputedByteLength;  
+    reg  [$clog2(MAX_USE_BYTES)-1:0] USEStreamBytesAdjustment_q;  
      
     /* verilator lint_off WIDTH */
-    assign USEStreamComputedByteLength = FIXEDFIELD_LENGTH_BYTES[$clog2(MAX_USE_BYTES)-1:0] + 
-                                         delimiterByteNum[$clog2(MAX_USE_BYTES)-1:0] + {6'b000001} - {3'b000, USEStartByte};  
 
-
-
-    always @(posedge clk) USEStreamByteLength <= (delimiterByteNum == 0) ? MAX_USE_BYTES : USEStreamComputedByteLength; 
+    assign USEStreamComputedByteLength = delimiterByteNum + USEStreamBytesAdjustment_q; 
+    always @(posedge clk) USEStreamByteLength <= (delimiterByteNum == DEEPEST_NUM_BYTES_MESSAGE_COULD_OCCUPY) ? MAX_USE_BYTES : USEStreamComputedByteLength; 
 
     /* verilator lint_on WIDTH */
 
@@ -168,8 +174,8 @@ module StreamElement
    //
    // This is the byte position of the last byte in the message, regardless of the number of bytes we may need to shift. 
    //
-   wire [6:0] AbsoluteLastByteInMessage;
-   assign     AbsoluteLastByteInMessage = {1'b0,delimiterByteNum[4:0]} + FIXEDFIELD_LENGTH_BYTES[6:0]; 
+   reg [6:0]  LastBankHoldingMessage; 
+   assign     LastBankHoldingMessage = {1'b0,delimiterByteNum[4:0]} + FIXEDFIELD_LENGTH_BYTES[6:0]; 
    
    /////////////////////////////////////////////////////////////////////////////////////////////////
    //
@@ -182,10 +188,6 @@ module StreamElement
    assign latchData = (token) && (dataInValid); 
    assign latchDataToSecondBank = tokenIn && (firstByteOffsetIn != 0);      
 
-   genvar BI; 
-     for (BI = 0; BI < MAX_VARIABLEFIELD_LENGTH+ DATA_BUS_WIDTH_BYTES; BI = BI + 1) begin : delimiterByteArrayBuilder 
-       assign delimiterByteArray[BI] = (USEStreamByteFifo[BI][7:0] == 'h2c) ? 1 : 0;
-     end
 
 
    // Rules are pretty simple:
@@ -237,14 +239,14 @@ module StreamElement
     //
     always @(posedge clk) 
     begin 
-      integer AbsoluteLastByteIWillHave = 0; 
       if (reset) 
       begin 
-        USEStreamState         <= USEStreamState_Empty; 
-        USEStartByte           <= 0; 
-        USEStreamByteLengthOut <= 0;
-        USECurrentBank         <= 0; 
-        passToken              <= 0;
+        USEStreamState             <= USEStreamState_Empty; 
+        USEStartByte               = 0; 
+        USEStreamByteLengthOut     <= 0;
+        USECurrentBank             <= 0; 
+        passToken                  <= 0;
+        USEStreamBytesAdjustment_q <= FIXEDFIELD_LENGTH_BYTES[$clog2(MAX_USE_BYTES)-1:0] + {6'b000001} - 0;
       end
       else 
       begin    
@@ -255,7 +257,9 @@ module StreamElement
         begin
            $display("Model: Stream Element ", MY_ID," in Empty"); 
            if (tokenIn)
-              USEStartByte   <= firstByteOffsetIn;
+              USEStartByte   = firstByteOffsetIn;
+              /* verilator lint_off WIDTH */
+              /* verilator lint_on WIDTH */
 
            // Preparing for the *next* cycle. 
            if ((dataInValid) && ((tokenIn) || (token))) 
@@ -274,17 +278,16 @@ module StreamElement
         end
         else if (USEStreamState == USEStreamState_Filling) 
         begin
-           AbsoluteLastByteIWillHave = $unsigned(USECurrentBank + 1) *DATA_BUS_WIDTH_BYTES-1; 
            if (latchData) begin     
              $display("Model: Stream Element ", MY_ID," Filling " , USECurrentBank , " latchdata high " );
              $display("Model: Stream Element ", MY_ID," USEStartByte ",USEStartByte, " USEStreamByteLength ", USEStreamByteLength,  
-                      " AbsoluteLastByteIWillHave ", AbsoluteLastByteIWillHave, 
-                      " AbsoluteLastByteInMessage ", AbsoluteLastByteInMessage, " ", someNumber );
+                      " CurrentBank ", USECurrentBank, 
+                      " LastBankHoldingMessage ", LastBankHoldingMessage, " ", someNumber, "USEStreamByteAdjust", USEStreamBytesAdjustment_q );
 
              USECurrentBank <= USECurrentBank + 1;  
              // If we have the data we need. 
     /* verilator lint_off WIDTH */
-             if (AbsoluteLastByteIWillHave >= AbsoluteLastByteInMessage) 
+             if (LastBankHoldingMessage[6:3] == USECurrentBank) 
              begin
                passToken <= 1; 
                if (USEStartByte > 0)  // If nothing to shift go straight to 
@@ -316,14 +319,18 @@ module StreamElement
     /* verilator lint_off WIDTH */
             if (USEStartByte >= 4) 
             begin 
-               USEStartByte     <= USEStartByte - 4; 
+               USEStartByte     = USEStartByte - 4; 
             end
             else
             if (USEStartByte[1] == 1) 
-                USEStartByte    <= USEStartByte - 2;
+            begin 
+               USEStartByte    = USEStartByte - 2;
+            end 
             else
             if (USEStartByte[0] == 1) 
-               USEStartByte     <= USEStartByte - 1;
+            begin 
+               USEStartByte     = USEStartByte - 1;
+            end 
             else             
             begin 
               USEStreamState         <= USEStreamState_WaitingForTake;
@@ -344,6 +351,9 @@ module StreamElement
              USECurrentBank         <= 0;
           end   
         end
+        /* verilator lint_off WIDTH */
+        USEStreamBytesAdjustment_q <= FIXEDFIELD_LENGTH_BYTES[$clog2(MAX_USE_BYTES)-1:0] + {6'b000001} - USEStartByte;
+        /* verilator lint_on WIDTH */
       end
     end
 
@@ -359,8 +369,8 @@ module StreamElement
           if ((byteNum % 8) == 0) $write(" ");
         end 
         $write(" Start Byte %h ",USEStartByte);
-        $write(" USEStreamState  ",USEStreamState," USECurrentBank ",USECurrentBank," Token ", token," AbsoluteLastByteInMessage ",AbsoluteLastByteInMessage," ");
-        $write(" DelimiterByteNum ",delimiterByteNum ,"\n"); 
+        $write(" USEStreamState  ",USEStreamState," USECurrentBank ",USECurrentBank," Token ", token," ");
+        $write(" DelimiterByteNum ",delimiterByteNum , " USEStreamByteLengthOut", USEStreamByteLengthOut,"\n"); 
        end 
     
     
