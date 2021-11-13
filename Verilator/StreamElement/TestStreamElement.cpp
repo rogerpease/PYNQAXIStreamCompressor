@@ -152,7 +152,7 @@ class StreamElementWrapperClass : VStreamElement
 
       for (int toggleCount = 0;toggleCount<NumClockTicksToShift+1;toggleCount++) { ToggleClock(); } 
 
-      if (debug) std::cout << "Test: OUT: ByteLength " << (unsigned int) this->USEStreamByteLengthOut << std::endl; 
+      if (debug) std::cout << "Test: OUT: ByteLength " << (unsigned int) this->USEStreamByteLengthOut << " " << (Data->GetDelimiterBytePosition()+NUMBYTESPASTDELIMITER+1) << std::endl;
       if (debug) ReceiveStreamOut(); 
 
       // Check Byte length matches
