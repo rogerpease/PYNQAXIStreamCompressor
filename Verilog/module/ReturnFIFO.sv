@@ -34,7 +34,6 @@ module ReturnFIFO
    input wire [(NUM_BYTES_INPUT_WIDTH)-1:0][7:0]  dataIn,
    input wire [$clog2(NUM_UNCOMPRESSED_ELEMENTS)-1:0] dataInBytesValid, // Number of bytes available, may exceed 
    output wire  dataInShift, // Tells the sender to shift data down by NUM_BYTES_INPUT_WIDTH
-   
    input wire endOfStream, 
 
    output reg [(NUM_BYTES_OUTPUT_WIDTH)-1:0][7:0] dataOut,
@@ -71,15 +70,20 @@ module ReturnFIFO
      integer i; 
      if (reset)
      begin
+       $display ("RETURNFIFO: Resetting!"); 
      end
-     if (takeData)
-     begin 
-       for (i = 0; i < NUM_BYTES_INPUT_WIDTH; i++)
-         if (i < numBytesToRead)
-           begin
-             FifoPieces[FifoEnd+i] <= dataIn[i];
-           end
-     end   
+     else 
+     begin
+       $display ("RETURNFIFO: Taking data!"); 
+       if (takeData)
+       begin 
+         for (i = 0; i < NUM_BYTES_INPUT_WIDTH; i++)
+           if (i < numBytesToRead)
+             begin
+               FifoPieces[FifoEnd+i] <= dataIn[i];
+             end
+       end   
+     end
    end
      
    always @(posedge clk)    
@@ -121,18 +125,16 @@ module ReturnFIFO
      end
    end      
 
-`ifdef VERILATOR
    always @(negedge clk) 
    begin
      integer elementNum; 
      integer elementCount = FifoEnd - FifoStart; 
-     $display("Fifo Start ",FifoStart," Fifo End ", FifoEnd, " FifoCount ", FifoCount); 
+     $display("FIFO START ",FifoStart," FIFO END ", FifoEnd, " FifoCount ", FifoCount); 
      for (elementNum = 0;  elementNum <= elementCount; elementNum++)
      begin 
-       $write("   Index  ",(elementNum+FifoStart) %FIFO_DEPTH," Element %h\n", FifoPieces[(elementNum+FifoStart)%FIFO_DEPTH]) ;
+       $display("  FIFO Index  ",(elementNum+FifoStart) %FIFO_DEPTH," Element %h\n", FifoPieces[(elementNum+FifoStart)%FIFO_DEPTH]) ;
      end 
    end 
-`endif 
 /* verilator lint_on WIDTH */
 
 endmodule

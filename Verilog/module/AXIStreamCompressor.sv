@@ -21,22 +21,26 @@ module AXIStreamCompressor
    parameter FIFO_DEPTH               = 64
   )
   ( 
-      input clk, 
-      input reset,
-      input wire  [DATA_BUS_WIDTH_BYTES-1:0][7:0] dataIn,
-      input wire   dataInValid,
-      input wire   dataInSTRB,
-      output wire  dataInReady,
+      input dataIn_clk, 
+      input dataIn_aresetn,
+      input wire  [DATA_BUS_WIDTH_BYTES-1:0][7:0] dataIn_tdata,
+      input wire  dataIn_tvalid,
+      input wire  [DATA_BUS_WIDTH_BYTES-1:0] dataIn_tstrb,
+      input wire  [DATA_BUS_WIDTH_BYTES-1:0] dataIn_tlast,
+      output wire  dataIn_tready,
 
-      output wire [DATA_BUS_WIDTH_BYTES-1:0][7:0] dataOut, 
-      output wire dataOutValid,
-      output wire [DATA_BUS_WIDTH_BYTES-1:0] dataOutSTRB,
-      input  wire dataOutReady
+      input dataOut_clk, 
+      input dataOut_aresetn,
+      output wire [DATA_BUS_WIDTH_BYTES-1:0][7:0] dataOut_tdata, 
+      output wire dataOut_tvalid,
+      output wire [DATA_BUS_WIDTH_BYTES-1:0] dataOut_tstrb,
+      input  wire dataOut_tready,
+      output wire dataOut_tlast
 
   );
 
-  assign  dataInReady  = 1;
-  assign  dataOutSTRB  = 8'b11111111;
+  assign  dataIn_tready  = 1;
+  assign  dataOut_tstrb  = 8'b11111111;
 
 
   // 
@@ -66,11 +70,11 @@ module AXIStreamCompressor
    ) 
    StreamElement_inst
    (
-      .clk(clk),
-      .reset(reset),
+      .clk(dataIn_clk),
+      .reset(dataIn_aresetn),
 
-      .dataIn (dataIn),
-      .dataInValid(dataInValid),
+      .dataIn (dataIn_tdata),
+      .dataInValid(dataIn_tvalid),
 
       .tokenIn(tokenChain[streamElementIndex]),
       .firstByteOffsetIn(firstByteOffset[streamElementIndex]),
@@ -85,7 +89,7 @@ module AXIStreamCompressor
 
   end 
 
-   always @(negedge clk)  
+   always @(negedge dataIn_clk)  
    begin 
      $display("AXIStreamCompressor TokenChain: ",tokenChain[3],
                                                  tokenChain[2],
@@ -107,9 +111,9 @@ module AXIStreamCompressor
 
    reg [1:0] StreamElementInUse;
 
-   always_ff @(posedge clk) 
+   always_ff @(posedge dataIn_clk) 
    begin 
-     if (reset)
+     if (dataIn_aresetn)
      begin  
        StreamElementInUse =  0;
      end 
@@ -147,8 +151,8 @@ module AXIStreamCompressor
     CompressionModule 
     #(.SHIFTLENGTH_BYTES(FIFO_MAX_INGEST_BYTES))  
     CompressionModule_inst
-      (.clk(clk),
-       .reset(reset),
+      (.clk(dataIn_clk),
+       .reset(dataIn_aresetn),
 
        .USEData     (USEDataMuxedToCompression), 
        .USEByteCount(USEByteCountMuxedToCompression), 
@@ -158,9 +162,9 @@ module AXIStreamCompressor
        .CSEShift    (CSEShiftFromOutFIFO));
 
 
-   always @(posedge clk) 
+   always @(posedge dataIn_clk) 
    begin 
-     $display("CSEDataToMux ",CSEDataToMux," BC: ",CSEByteCount," Shift Out ",CSEShiftFromOutFIFO);
+     $display("CSEDataToReturnFifoe",CSEDataToMux," ByteCount: ",CSEByteCount," Shift Out ",CSEShiftFromOutFIFO);
    end 
 
    ReturnFIFO  
@@ -172,14 +176,14 @@ module AXIStreamCompressor
    )
    ReturnFIFO_inst
    (
-   .clk(clk), 
-   .reset(reset), 
+   .clk(dataOut_clk), 
+   .reset(dataOut_aresetn), 
    .dataIn(CSEDataToMux),
    .dataInBytesValid(CSEByteCount),
    .dataInShift(CSEShiftFromOutFIFO), 
    .endOfStream(0),
-   .dataOut(dataOut),
-   .dataOutValid(dataOutValid)
+   .dataOut(dataOut_tdata),
+   .dataOutValid(dataOut_tvalid)
    );
 
 
