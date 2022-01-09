@@ -50,6 +50,7 @@ module AXIStreamCompressor
 
   wire [MAX_UNCOMPRESSED_BYTES-1:0][7:0]     USEStreamOuts       [NUM_STREAM_ELEMENTS-1:0];
   wire [$clog2(MAX_UNCOMPRESSED_BYTES)-1:0]  USEStreamByteCounts [NUM_STREAM_ELEMENTS-1:0];
+  wire [$clog2(MAX_UNCOMPRESSED_BYTES)-1:0]  USEStreamLasts      [NUM_STREAM_ELEMENTS-1:0];
   reg                                        USEStreamDataTakens [NUM_STREAM_ELEMENTS-1:0];
 
   wire                                       tokenChain          [NUM_STREAM_ELEMENTS-1:0]; 
@@ -75,6 +76,7 @@ module AXIStreamCompressor
 
       .dataIn (dataIn_tdata),
       .dataInValid(dataIn_tvalid),
+      .dataIn_tlast(dataIn_tlast),
 
       .tokenIn(tokenChain[streamElementIndex]),
       .firstByteOffsetIn(firstByteOffset[streamElementIndex]),
@@ -84,6 +86,7 @@ module AXIStreamCompressor
 
       .USEStreamOut(USEStreamOuts[streamElementIndex]),
       .USEStreamByteLengthOut(USEStreamByteCounts[streamElementIndex]),
+      .USEStreamLast(USEStreamLasts[streamElementIndex]),
       .USEStreamDataTaken(USEStreamDataTakens[streamElementIndex])
    );
 
@@ -183,7 +186,8 @@ module AXIStreamCompressor
    .dataInShift(CSEShiftFromOutFIFO), 
    .endOfStream(0),
    .dataOut(dataOut_tdata),
-   .dataOutValid(dataOut_tvalid)
+   .dataOutValid(dataOut_tvalid),
+   .dataOut_tready(dataOut_tready)
    );
 
 

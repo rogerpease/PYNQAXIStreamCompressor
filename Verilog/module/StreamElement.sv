@@ -41,6 +41,7 @@ module StreamElement
 
       input [(DATA_BUS_WIDTH_BYTES-1):0][7:0] dataIn, 
       input dataInValid, 
+      input dataIn_tlast, 
    
       input wire tokenIn, 
       input wire [$clog2(DATA_BUS_WIDTH_BYTES)-1:0] firstByteOffsetIn, 
@@ -50,6 +51,7 @@ module StreamElement
 
       output wire [(MAX_UNCOMPRESSED_BYTES)-1:0][7:0]    USEStreamOut,
       output reg  [$clog2(MAX_UNCOMPRESSED_BYTES)-1:0]   USEStreamByteLengthOut,
+      output reg                                         USEStreamLast,
       input  wire                                        USEStreamDataTaken
    );  
    
@@ -278,6 +280,7 @@ module StreamElement
         end
         else if (USEStreamState == USEStreamState_Filling) 
         begin
+           USEStreamLast          <= USEStreamLast || dataIn_tlast; 
            if (latchData) begin     
              $display("Model: Stream Element ", MY_ID," Filling " , USECurrentBank , " latchdata high " );
              $display("Model: Stream Element ", MY_ID," USEStartByte ",USEStartByte, " USEStreamByteLength ", USEStreamByteLength,  
@@ -315,6 +318,7 @@ module StreamElement
         end 
         else if (USEStreamState == USEStreamState_Shifting) 
         begin
+            USEStreamLast          <= USEStreamLast || dataIn_tlast; 
             $display("Model: Stream Element ", MY_ID," Shifting state." );
     /* verilator lint_off WIDTH */
             if (USEStartByte >= 4) 
@@ -349,6 +353,7 @@ module StreamElement
              USEStreamByteLengthOut <= 0;
              USEStreamState         <= USEStreamState_Empty;
              USECurrentBank         <= 0;
+             USEStreamLast          <= 0; 
           end   
         end
         /* verilator lint_off WIDTH */

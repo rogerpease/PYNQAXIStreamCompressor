@@ -37,7 +37,8 @@ module ReturnFIFO
    input wire endOfStream, 
 
    output reg [(NUM_BYTES_OUTPUT_WIDTH)-1:0][7:0] dataOut,
-   output reg dataOutValid
+   output reg dataOutValid,
+   input  reg dataOut_tready
 );
 
 
@@ -85,20 +86,42 @@ module ReturnFIFO
        end   
      end
    end
+
+   reg dataOutReady_q;
+   reg dataOutValid_q;
+
+   always @(posedge clk)
+   begin
+     dataOutReady_q <= dataOut_tready;
+     dataOutValid_q <= dataOutValid;
+   end 
      
+   // Advance output data *if* 
+   //  dataAvailable *and* Ready on last cycle was high.  
    always @(posedge clk)    
    begin
      integer i;          
-     if ((dataAvailable) || (endOfStream))
+     reg dataAdvanced  = ((dataOutValid_q) && (dataOutReady_q)); 
+     reg dataAvailableLastCycle = dataOutValid_q; 
+                          
+     if ((dataAvailableLastCycle) && (!dataAdvanced))
+     begin 
+       // Do nothing. 
+       dataOutValid <= 1;
+     end 
+     else if ((((dataAvailableLastCycle) && (dataAdvanced)) || (!dataAvailableLastCycle)) 
+               && (dataAvailable))
      begin
        for (i = 0; i < NUM_BYTES_OUTPUT_WIDTH; i++)
-       begin
-         dataOut[i] <= FifoPieces[FifoStart+i];
-       end   
+         begin
+           dataOut[i] <= FifoPieces[FifoStart+i];
+         end   
        dataOutValid <= 1;
      end
      else
-        dataOutValid <= 0;
+     begin
+       dataOutValid <= 0;
+     end  
    end    
 
    always @(posedge clk) 
@@ -125,6 +148,7 @@ module ReturnFIFO
      end
    end      
 
+`ifdef Verilator 
    always @(negedge clk) 
    begin
      integer elementNum; 
@@ -135,6 +159,7 @@ module ReturnFIFO
        $display("  FIFO Index  ",(elementNum+FifoStart) %FIFO_DEPTH," Element %h\n", FifoPieces[(elementNum+FifoStart)%FIFO_DEPTH]) ;
      end 
    end 
+`endif 
 /* verilator lint_on WIDTH */
 
 endmodule
