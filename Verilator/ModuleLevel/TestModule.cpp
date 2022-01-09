@@ -143,6 +143,8 @@ class AXIStreamCompressorWrapperClass : VAXIStreamCompressor
       bool lastByte;
 
       auto goldenData = Data.StreamBytePayload();
+
+      this->dataOut_tready = 1; 
  
       while (lastByte == false)
       { 
@@ -158,6 +160,7 @@ class AXIStreamCompressorWrapperClass : VAXIStreamCompressor
 
         //sentData.push_back(this->dataIn_tdata); 
         std::cout << "Test: DataIn: " <<  std::hex << this->dataIn_tdata << std::dec << " Data In Valid " << (int) this->dataIn_tvalid << std::endl;
+        this->dataOut_tready = 1; 
 
         ToggleClock(); 
         if (this->dataOut_tvalid) 
